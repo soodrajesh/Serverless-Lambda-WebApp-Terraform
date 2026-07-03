@@ -9,7 +9,7 @@ I built it this way to have a minimal, fast-to-deploy example of a Lambda-backed
 ```mermaid
 flowchart LR
     Client[Client] -->|HTTPS request| APIGW["API Gateway HTTP API\nstage: $default"]
-    APIGW -->|AWS_PROXY integration\nroute: $default| Lambda["Lambda: simple-web-app\nnodejs18.x"]
+    APIGW -->|"AWS_PROXY integration, route: $default"| Lambda["Lambda: simple-web-app, nodejs18.x"]
     Lambda -->|assumes role| IAMRole["IAM Role: lambda_exec_role"]
     IAMRole -->|managed policy| BasicExec["AWSLambdaBasicExecutionRole"]
     BasicExec --> CWLogs["CloudWatch Logs"]
