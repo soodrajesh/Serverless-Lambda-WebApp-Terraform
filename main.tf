@@ -1,6 +1,6 @@
 provider "aws" {
-  region  = "eu-west-1"  # Ireland region
-  profile = "raj-private"
+  region  = var.aws_region
+  profile = var.aws_profile
 }
 
 # Create IAM role for Lambda execution
@@ -29,24 +29,20 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "${path.module}/lambda_function.zip"
-  
+
   source {
     content  = file("${path.module}/index.js")
     filename = "index.js"
   }
-  
-  depends_on = [
-    local_file.index_js
-  ]
 }
 
 # Create the Lambda function
 resource "aws_lambda_function" "api" {
-  function_name = "simple-web-app"
-  role          = aws_iam_role.lambda_exec.arn
-  handler       = "index.handler"
-  runtime       = "nodejs18.x"
-  filename      = data.archive_file.lambda_zip.output_path
+  function_name    = "simple-web-app"
+  role             = aws_iam_role.lambda_exec.arn
+  handler          = "index.handler"
+  runtime          = "nodejs18.x"
+  filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   environment {

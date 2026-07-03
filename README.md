@@ -1,249 +1,77 @@
-# 🚀 AWS Lambda Web App with Terraform
+# Serverless Lambda Web App (Terraform)
 
-A modern, serverless web application deployed on AWS Lambda and API Gateway, fully managed with Terraform. This project demonstrates best practices for building and deploying serverless applications with infrastructure as code.
+A single Lambda function behind an API Gateway HTTP API, provisioned entirely with Terraform. The Lambda is a small Node.js router that handles a handful of routes itself (`/`, `/api/hello`, `/api/health`, `/api/example/{id}`) and returns either JSON or a hand-rolled HTML page. There's no framework, no database, and no build step — the whole app is the one `index.js` file, zipped up by Terraform's `archive_file` data source and shipped straight to Lambda.
 
-## ✨ Features
+I built it this way to have a minimal, fast-to-deploy example of a Lambda-backed HTTP API that doesn't drag in API Gateway REST resources, Express, or a bundler. Everything that would normally be API Gateway routing configuration lives in the Lambda's own `routes` object instead.
 
-- **Serverless Architecture**: Built on AWS Lambda and API Gateway
-- **Infrastructure as Code**: Managed with Terraform
-- **Modern Web Interface**: Responsive, mobile-friendly UI
-- **RESTful API**: Well-structured endpoints with proper HTTP methods
-- **CORS Support**: Pre-configured for web applications
-- **Environment-Aware**: Different configurations for development/production
+## Architecture
 
-## 🏗️ Project Structure
+```mermaid
+flowchart LR
+    Client[Client] -->|HTTPS request| APIGW["API Gateway HTTP API\nstage: $default"]
+    APIGW -->|AWS_PROXY integration\nroute: $default| Lambda["Lambda: simple-web-app\nnodejs18.x"]
+    Lambda -->|assumes role| IAMRole["IAM Role: lambda_exec_role"]
+    IAMRole -->|managed policy| BasicExec["AWSLambdaBasicExecutionRole"]
+    BasicExec --> CWLogs["CloudWatch Logs"]
+    Lambda -->|JSON or HTML response| Client
+```
+
+The API Gateway resource is an HTTP API (`aws_apigatewayv2_api`), not a REST API. For a single Lambda handling all its own routing, HTTP APIs are cheaper and have a smaller Terraform footprint — there's no need for REST API resources, methods, or method responses. The `$default` route with `AWS_PROXY` integration means literally any path and method reaches the same Lambda; the routing logic (matching `GET /api/hello`, extracting `{id}` from `/api/example/{id}`, etc.) is done in plain JavaScript in `index.js` rather than in Terraform or API Gateway configuration. That trades some API Gateway features (per-route throttling, request validation, API keys) for a much simpler infra definition.
+
+The Lambda's IAM role only has `AWSLambdaBasicExecutionRole` attached, which grants CloudWatch Logs write access and nothing else. That's deliberate, not an oversight: the function doesn't touch DynamoDB, S3, or any other AWS service, so there's no reason to grant it more than logging permissions. Packaging is equally minimal — `package.json` has no dependencies, so `archive_file` just zips the single `index.js` file rather than running `npm install` or a bundler.
+
+## Project structure
 
 ```
 .
-├── .gitignore          # Git ignore rules
-├── README.md           # This file
-├── index.js            # Lambda function source code
-├── main.tf             # Main Terraform configuration
-├── locals.tf           # Local variables and configurations
-└── package.json        # Node.js dependencies and scripts
+├── .gitignore
+├── README.md
+├── index.js         # Lambda handler and route logic
+├── main.tf          # Provider, IAM role, Lambda, API Gateway
+├── variables.tf      # aws_region / aws_profile inputs
+└── package.json      # No runtime dependencies; packaging script only
 ```
 
-## 🚀 Getting Started
-
-### Prerequisites
-
-- [Terraform](https://www.terraform.io/downloads.html) (v1.0.0 or later)
-- [AWS CLI](https://aws.amazon.com/cli/) configured with appropriate credentials
-- [Node.js](https://nodejs.org/) (v18.x or later)
-- AWS Account with appropriate permissions
-
-### Installation
-
-1. Clone the repository
-   ```bash
-   git clone <repository-url>
-   cd aws-lambda-terraform
-   ```
-
-2. Initialize Terraform
-   ```bash
-   terraform init
-   ```
-
-### Deployment
-
-1. Package the Lambda function
-   ```bash
-   zip -r lambda.zip index.js
-   ```
-
-2. Review the execution plan
-   ```bash
-   terraform plan
-   ```
-
-3. Deploy the infrastructure
-   ```bash
-   terraform apply
-   ```
-   Confirm with `yes` when prompted.
-
-## 🌐 API Endpoints
-
-- `GET /` - Homepage with documentation
-- `GET /api/hello` - Simple greeting endpoint
-- `GET /api/health` - Health check endpoint
-- `GET /api/example/{id}` - Example endpoint with path parameters
-
-### Example Requests
+## How to run this
 
 ```bash
-# Get a greeting
-curl https://YOUR_API_GATEWAY_URL/api/hello
+git clone https://github.com/soodrajesh/Serverless-Lambda-WebApp-Terraform.git
+cd Serverless-Lambda-WebApp-Terraform
 
-# Check API health
-curl https://YOUR_API_GATEWAY_URL/api/health
-
-# Example with path parameter
-curl https://YOUR_API_GATEWAY_URL/api/example/123
-```
-
-## 🛠️ Development
-
-### Local Development
-
-1. Install dependencies (if any)
-   ```bash
-   npm install
-   ```
-
-2. Make your changes to `index.js`
-
-3. Test changes locally using AWS SAM or AWS CLI
-
-### Updating the Lambda Function
-
-1. Make your code changes in `index.js`
-2. Create a new deployment package
-   ```bash
-   zip -r lambda.zip index.js
-   ```
-3. Update the Lambda function
-   ```bash
-   aws lambda update-function-code \
-     --function-name simple-web-app \
-     --zip-file fileb://lambda.zip \
-     --region eu-west-1 \
-     --profile raj-private
-   ```
-
-## 🧹 Cleanup
-
-To avoid unnecessary AWS charges, destroy all resources when done:
-
-```bash
-terraform destroy
-```
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 Documentation
-
-- [AWS Lambda Documentation](https://docs.aws.amazon.com/lambda/)
-- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
-- [API Gateway Documentation](https://docs.aws.amazon.com/apigateway/)
-
-## 🔍 Troubleshooting
-
-- **Deployment Issues**: Check CloudWatch logs for the Lambda function
-- **API Gateway Errors**: Verify the integration with Lambda in the AWS Console
-- **CORS Problems**: Ensure the `Access-Control-Allow-Origin` header is properly set in responses
-
-## 📚 Command Reference
-
-### Terraform Commands
-
-```bash
-# Initialize Terraform in the project directory
 terraform init
-
-# Check the execution plan
-terraform plan
-
-# Apply changes to create/update infrastructure
-terraform apply
-
-# Destroy all resources
-terraform destroy
-
-# Format Terraform files
-terraform fmt
-
-# Validate Terraform configuration
-terraform validate
-
-# Show the current state
-terraform show
+terraform plan -var="aws_region=eu-west-1" -var="aws_profile=your-cli-profile"
+terraform apply -var="aws_region=eu-west-1" -var="aws_profile=your-cli-profile"
 ```
 
-### AWS CLI Commands
+Both variables default to `eu-west-1` and `default`, so `terraform apply` works as-is if you already have a `default` AWS CLI profile with permissions to create IAM roles, Lambda functions, and API Gateway resources. On apply, Terraform prints the invoke URL as the `api_endpoint` output:
 
 ```bash
-# Update Lambda function code
-aws lambda update-function-code \
-  --function-name simple-web-app \
-  --zip-file fileb://lambda.zip \
-  --region eu-west-1 \
-  --profile raj-private
-
-# Invoke Lambda function directly
-aws lambda invoke \
-  --function-name simple-web-app \
-  --payload '{"key": "value"}' \
-  output.json \
-  --region eu-west-1 \
-  --profile raj-private
-
-# View Lambda function configuration
-aws lambda get-function-configuration \
-  --function-name simple-web-app \
-  --region eu-west-1 \
-  --profile raj-private
-
-# View Lambda function logs in CloudWatch
-aws logs filter-log-events \
-  --log-group-name /aws/lambda/simple-web-app \
-  --region eu-west-1 \
-  --profile raj-private
-
-# List API Gateway APIs
-aws apigatewayv2 get-apis \
-  --region eu-west-1 \
-  --profile raj-private
-
-# Get API Gateway details
-aws apigatewayv2 get-api \
-  --api-id YOUR_API_ID \
-  --region eu-west-1 \
-  --profile raj-private
-
-# Test API Gateway endpoint
-curl https://YOUR_API_GATEWAY_URL/api/hello
+curl "$(terraform output -raw api_endpoint)/api/hello"
+curl "$(terraform output -raw api_endpoint)/api/health"
 ```
 
-### Common Workflows
+To update the function after changing `index.js`, just run `terraform apply` again — the `archive_file` data source recomputes the zip's hash and Terraform redeploys the new code.
 
-#### Update and Deploy Lambda Function
+When done, tear it down:
 
 ```bash
-# 1. Update your Lambda function code in index.js
-
-# 2. Create a new deployment package
-zip -r lambda.zip index.js
-
-# 3. Update the Lambda function
-aws lambda update-function-code \
-  --function-name simple-web-app \
-  --zip-file fileb://lambda.zip \
-  --region eu-west-1 \
-  --profile raj-private
-
-# 4. Test the updated function
-curl https://YOUR_API_GATEWAY_URL/api/hello
+terraform destroy -var="aws_region=eu-west-1" -var="aws_profile=your-cli-profile"
 ```
 
-#### Update Infrastructure
+## Known gaps
 
-```bash
-# 1. Update your Terraform configuration files
+There's no persistent storage. Every response is either a static string or computed at request time (timestamps, uptime, memory usage) — there's no DynamoDB table or S3 bucket backing it, so this is really a routing/API-Gateway-integration demo, not a data-driven app.
 
-# 2. Review changes
-terraform plan
+No authentication. The API Gateway route is wide open; anyone with the invoke URL can hit every endpoint.
 
-# 3. Apply changes
-terraform apply
+No custom domain or TLS setup. The app is only reachable at the default `execute-api.amazonaws.com` URL that API Gateway generates — no ACM certificate, no Route 53 record, no `aws_apigatewayv2_domain_name`.
 
-# 4. Verify deployment
-curl https://YOUR_API_GATEWAY_URL/api/health
-```
+No CI/CD. Deploying a code change means running `terraform apply` from your own machine. There's no GitHub Actions workflow to run `terraform plan`/`apply` or to lint the Lambda code.
+
+No automated tests. Nothing exercises the route matching in `index.js` or validates the Terraform plan beyond `terraform validate`.
+
+No monitoring or alarms. CloudWatch Logs are captured (via the basic execution role), but there are no CloudWatch alarms, dashboards, or X-Ray tracing configured — if the Lambda starts erroring, you'd only find out by looking.
+
+CORS is wide open (`Access-Control-Allow-Origin: *`), which is fine for a demo but not something to carry into anything handling real user data.
+
+Terraform state is local. There's no S3 backend or DynamoDB lock table configured, so this isn't set up for multiple people (or a CI pipeline) applying changes safely.
